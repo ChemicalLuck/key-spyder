@@ -1,9 +1,11 @@
 import logging
-from urllib.parse import urljoin
+import logging.handlers
+from urllib.parse import urljoin, urlparse
 from datetime import datetime
-from os import path
+from os import path, makedirs
 
 import requests
+from requests.exceptions import RequestException
 from bs4 import BeautifulSoup
 
 
@@ -29,8 +31,10 @@ class Crawler:
         if keywords is None:
             keywords = []
         if output_directory is None:
-            output_directory = path.expanduser('~\Documents')
+            output_directory = path.expanduser('~\Documents\key-spyder')
 
+        if not path.exists(output_directory):
+            makedirs(path.join(output_directory, "logs"))
 
         self.urls_to_visit = urls
         self.keywords = keywords
@@ -42,28 +46,52 @@ class Crawler:
         self.visited_urls = []
         self.results = ["url,params,keyword,line\n"]
 
+        now = datetime.now().strftime('%Y-%m-%dT%H%M%SZ')
+        fh_path = f"{output_directory}/logs/key-spyder_{now}.log"
+        file_handler = logging.FileHandler(fh_path, "w")
+        self.logger = logging.getLogger("key-spyder")
+        self.logger.addHandler(file_handler)
+
+        if self.verbose:
+            self.logger.setLevel(10)
+
     @property
     def all_urls(self):
         return self.urls_to_visit + self.visited_urls
 
-    def log(self, message, override=False):
-        if self.verbose or override:
-            logging.info(message)
-
     def get_html(self, url):
-        return requests.get(url, self.params).text
+        try:
+            response = requests.get(url, self.params, allow_redirects=False)
+        except RequestException as e:
+            self.logger.exception(e)
+        else:
+            return response.text
 
-    def get_links(self, url, html):
+    @staticmethod
+    def get_links(url, html):
+        """
+        For a given url, search all anchor tags, return a list of all new links.
+        """
         soup = BeautifulSoup(html, 'html.parser')
+        parsed_url = urlparse(url)
+        prot_host_tld = f"{parsed_url.scheme}://{parsed_url.hostname}"
+
+        # Find all anchor tags on the page.
         for link in soup.find_all('a'):
             path = link.get('href')
+            # Make sure the href was set.
             if path:
+                # If it's an internal link, prepend the hostname to the path.
                 if path.startswith('/'):
-                    path = urljoin(url, path)
-                if "https://ffs.co.uk" in path and path not in self.all_urls:
+                    path = urljoin(prot_host_tld, path)
+                # If the new path is still on the beginning host.
+                if prot_host_tld in path:
                     yield path
 
     def get_keywords(self, url, html):
+        """
+        For a given url, check for keywords and write them to the results list.
+        """
         soup = BeautifulSoup(html, 'html.parser')
         text = soup.body.get_text().split("\n")
 
@@ -71,17 +99,20 @@ class Crawler:
 
         for line in text:
             for keyword in self.keywords:
-                self.log(f"Checking for '{keyword}' in '{line}' on {url}")
+                self.logger.debug(f"Checking for '{keyword}' in '{line}' on {url}")
                 if keyword.lower() in line.lower():
-                    self.log(f"Found '{keyword}' in '{line}' on {url}", override=True)
+                    self.logger.info(f"Found '{keyword}' in '{line}' on {url}")
                     self.write_line(url, keyword, line)
 
     def crawl(self, url, html):
-        self.log(f'Crawling: {url}')
-        for url in self.get_links(url, html):
-            self.log(f'Discovered: {url}')
-            if url not in self.all_urls:
-                self.urls_to_visit.append(url)
+        """
+        For a given url, Discover new links on that page.
+        """
+        self.logger.info(f'Crawling: {url}')
+        for link in self.get_links(url, html):
+            if link not in self.all_urls:
+                self.logger.info(f'Discovered: {link}')
+                self.urls_to_visit.append(link)
 
     def write_line(self, url, keyword, line):
         self.results = self.results + [f"{url},{self.params},{keyword},{line}\n"]
@@ -98,11 +129,12 @@ class Crawler:
     def run(self):
         while self.urls_to_visit:
             url = self.urls_to_visit.pop(0)
-            html = self.get_html(url)
-            if self.recursive:
-                self.crawl(url, html)
-            self.get_keywords(url, html)
             self.visited_urls.append(url)
+            html = self.get_html(url)
+            if html:
+                if self.recursive:
+                    self.crawl(url, html)
+                self.get_keywords(url, html)
         self.write_results()
 
     def __exit__(self):

@@ -6,3 +6,5 @@ venv
 dist
 key-spyder.toml
 key-spyder.egg-info
+logs/*
+.env
