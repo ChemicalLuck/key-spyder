@@ -1,5 +1,5 @@
 from key_spyder.crawler import Crawler
-from argparse import ArgumentParser
+from argparse import ArgumentParser, ArgumentError
 from multiprocessing import Process, log_to_stderr
 from logging import INFO
 
@@ -83,12 +83,24 @@ def run_from_cli(url, params, keywords, recursive, output, verbose, clear_cache)
 # Main function
 def main():
     args = parser.parse_args()
+    if args.verbose:
+        print(args)
+
+    def parse_params(params_args):
+        for param in params_args:
+            if '=' in param:
+                key, value = param.split('=')
+                yield key, value
+            else:
+                raise ArgumentError(f"Invalid parameter argument: {param}, parameters must be in the form 'key=value'")
+
+    params = dict(parse_params(args.params)) if args.params else None
 
     processes = []
     for url in args.urls:
         processes.append(Process(name=url,
                                  target=run_from_cli,
-                                 args=([url], args.params, args.keywords, args.recursive, args.output, args.verbose, args.clear_cache)))
+                                 args=([url], params, args.keywords, args.recursive, args.output, args.verbose, args.clear_cache)))
 
     if len(processes):
         if args.verbose:

@@ -3,9 +3,9 @@ import logging.handlers
 from urllib.parse import urljoin, urlparse
 from datetime import datetime
 from os import path, makedirs
+import csv
 
-import requests
-import requests_cache
+from requests_cache import CachedSession
 from requests.exceptions import RequestException
 from bs4 import BeautifulSoup
 
@@ -35,7 +35,7 @@ class Crawler:
         if output_directory is None:
             output_directory = path.expanduser('~\Documents\key-spyder')
 
-        for folder in ["logs", "results", "cache"]:
+        for folder in ["logs", "results"]:
             dir_path = path.join(output_directory, folder)
             if not path.exists(dir_path):
                 makedirs(dir_path)
@@ -58,17 +58,24 @@ class Crawler:
         if verbose:
             self.logger.setLevel(10)
 
-        requests_cache.install_cache(f"{output_directory}/cache")
+        cache_name = f"{output_directory}/cache"
+        self.session = CachedSession(cache_name, expire_after=86400)
         if clear_cache:
-            requests_cache.clear()
+            self.session.cache.clear()
+
 
     @property
     def all_urls(self):
         return self.urls_to_visit + self.visited_urls
 
     def get_html(self, url):
+        self.logger.debug(f"Getting: {url} {f'with {self.params}' if self.params else ''}")
         try:
-            response = requests.get(url, self.params, allow_redirects=False)
+            response = self.session.get(url, params=self.params, allow_redirects=False)
+            if response.from_cache:
+                self.logger.debug(f"Got: {url} from cache")
+            else:
+                self.logger.debug(f"Got: {url} in {response.elapsed.total_seconds()} seconds")
         except RequestException as e:
             self.logger.exception(e)
         else:
@@ -106,9 +113,9 @@ class Crawler:
 
         for line in text:
             for keyword in self.keywords:
-                self.logger.debug(f"Checking for '{keyword}' in '{line}' on {url}")
+                self.logger.debug(f"Checking: '{keyword}' in '{line}'")
                 if keyword.lower() in line.lower():
-                    self.logger.info(f"Found '{keyword}' in '{line}' on {url}")
+                    self.logger.info(f"Found: '{keyword}' in '{line}' on {url}")
                     self.write_line(url, keyword, line)
 
     def crawl(self, url, html):
@@ -122,7 +129,7 @@ class Crawler:
                 self.urls_to_visit.append(link)
 
     def write_line(self, url, keyword, line):
-        self.results = self.results + [f"{url},{self.params},{keyword},'{line}'\n"]
+        self.results = self.results + [f'{url},{self.params},{keyword},"{line}"\n']
 
     def write_results(self):
         now = datetime.now().strftime('%Y-%m-%dT%H%M%SZ')
@@ -144,6 +151,8 @@ class Crawler:
                 if self.keywords:
                     self.get_keywords(url, html)
         self.write_results()
+        self.logger.info(f"Output can be found at: {self.output_directory}")
 
     def __exit__(self):
         self.write_results()
+        self.session.close()
