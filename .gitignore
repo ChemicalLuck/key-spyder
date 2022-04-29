@@ -4,7 +4,5 @@ __pycache__
 venv
 .idea
 dist
-key-spyder.toml
-key-spyder.egg-info
-logs/*
+key_spyder.egg-info
 .env

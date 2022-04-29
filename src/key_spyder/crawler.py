@@ -5,6 +5,7 @@ from datetime import datetime
 from os import path, makedirs
 
 import requests
+import requests_cache
 from requests.exceptions import RequestException
 from bs4 import BeautifulSoup
 
@@ -22,7 +23,8 @@ class Crawler:
                  keywords: list[str] = None,
                  recursive: bool = False,
                  output_directory: str = None,
-                 verbose: bool = False):
+                 verbose: bool = False,
+                 clear_cache: bool = False):
 
         if urls is None:
             urls = []
@@ -33,15 +35,16 @@ class Crawler:
         if output_directory is None:
             output_directory = path.expanduser('~\Documents\key-spyder')
 
-        if not path.exists(output_directory):
-            makedirs(path.join(output_directory, "logs"))
+        for folder in ["logs", "results", "cache"]:
+            dir_path = path.join(output_directory, folder)
+            if not path.exists(dir_path):
+                makedirs(dir_path)
 
         self.urls_to_visit = urls
         self.keywords = keywords
         self.params = params
         self.recursive = recursive
         self.output_directory = output_directory
-        self.verbose = verbose
 
         self.visited_urls = []
         self.results = ["url,params,keyword,line\n"]
@@ -52,8 +55,12 @@ class Crawler:
         self.logger = logging.getLogger("key-spyder")
         self.logger.addHandler(file_handler)
 
-        if self.verbose:
+        if verbose:
             self.logger.setLevel(10)
+
+        requests_cache.install_cache(f"{output_directory}/cache")
+        if clear_cache:
+            requests_cache.clear()
 
     @property
     def all_urls(self):
@@ -115,11 +122,11 @@ class Crawler:
                 self.urls_to_visit.append(link)
 
     def write_line(self, url, keyword, line):
-        self.results = self.results + [f"{url},{self.params},{keyword},{line}\n"]
+        self.results = self.results + [f"{url},{self.params},{keyword},'{line}'\n"]
 
     def write_results(self):
         now = datetime.now().strftime('%Y-%m-%dT%H%M%SZ')
-        filename = path.join(self.output_directory, f"results_{now}.csv")
+        filename = path.join(self.output_directory, "results", f"results_{now}.csv")
         if len(self.results) > 1:
             with open(filename, "w") as f:
                 f.writelines(self.results)
@@ -134,7 +141,8 @@ class Crawler:
             if html:
                 if self.recursive:
                     self.crawl(url, html)
-                self.get_keywords(url, html)
+                if self.keywords:
+                    self.get_keywords(url, html)
         self.write_results()
 
     def __exit__(self):

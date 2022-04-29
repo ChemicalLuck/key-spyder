@@ -1,7 +1,3 @@
-#!/usr/bin/env python
-import os
-from os import path
-
 from key_spyder.crawler import Crawler
 from argparse import ArgumentParser
 from multiprocessing import Process, log_to_stderr
@@ -9,7 +5,6 @@ from logging import INFO
 
 parser = ArgumentParser(
     prog='key-spyder',
-    usage='%(prog)s [options]',
     description='Crawl websites for keywords')
 parser.add_argument(
     '-u', '--urls',
@@ -18,7 +13,7 @@ parser.add_argument(
     nargs='+',
     type=str,
     required=True,
-    help='URLs to crawl',
+    help='Entrypoint URLs to begin crawling',
     metavar='URLS'
 )
 parser.add_argument(
@@ -27,7 +22,7 @@ parser.add_argument(
     dest='params',
     nargs='+',
     required=False,
-    help='Parameters to crawl',
+    help='Parameters for requests while crawling',
     metavar='PARAMS'
 )
 parser.add_argument(
@@ -36,7 +31,7 @@ parser.add_argument(
     dest='keywords',
     nargs='+',
     required=True,
-    help='Keywords to search for',
+    help='Keywords to search for in crawled pages',
     metavar='KEYWORDS'
 )
 parser.add_argument(
@@ -44,8 +39,8 @@ parser.add_argument(
     action='store_true',
     dest='recursive',
     required=False,
-    default=True,
-    help='Recursively crawl subdomains'
+    default=False,
+    help='Recursively crawl linked pages'
 )
 parser.add_argument(
     '-o', '--output',
@@ -63,16 +58,25 @@ parser.add_argument(
     default=False,
     help='Verbose output'
 )
+parser.add_argument(
+    '-c', '--clear-cache',
+    action='store_true',
+    dest='clear_cache',
+    required=False,
+    default=False,
+    help='Clear cache before crawling'
+)
 
 
-def run_from_cli(url, params, keywords, recursive, output, verbose):
+def run_from_cli(url, params, keywords, recursive, output, verbose, clear_cache):
     Crawler(
         urls=url,
         params=params,
         keywords=keywords,
         recursive=recursive,
         output_directory=output,
-        verbose=verbose
+        verbose=verbose,
+        clear_cache=clear_cache
     ).run()
 
 
@@ -84,22 +88,10 @@ def main():
     for url in args.urls:
         processes.append(Process(name=url,
                                  target=run_from_cli,
-                                 args=([url], args.params, args.keywords, args.recursive, args.output, args.verbose)))
+                                 args=([url], args.params, args.keywords, args.recursive, args.output, args.verbose, args.clear_cache)))
 
     if len(processes):
         if args.verbose:
             log_to_stderr(INFO)
         [process.start() for process in processes]
         [process.join() for process in processes]
-
-
-if __name__ == '__main__':
-    main()
-    # Crawler(
-    #     urls=["https://www.google.com/"],
-    #     params=None,
-    #     keywords=["hello world"],
-    #     recursive=True,
-    #     output_directory=None,
-    #     verbose=False
-    # ).run()
