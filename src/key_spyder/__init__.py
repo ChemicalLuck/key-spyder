@@ -1,7 +1,11 @@
-from key_spyder.crawler import Crawler
-from argparse import ArgumentParser, ArgumentError
-from multiprocessing import Process, log_to_stderr
+from argparse import ArgumentError, ArgumentParser
 from logging import INFO
+from multiprocessing import Process, log_to_stderr
+from os import makedirs, path
+
+from key_spyder.crawler import Crawler
+from key_spyder.defaults import DEFAULT_PATH
+from key_spyder.sitemap import Sitemapper
 
 parser = ArgumentParser(
     prog='key-spyder',
@@ -30,7 +34,7 @@ parser.add_argument(
     action='store',
     dest='keywords',
     nargs='+',
-    required=True,
+    required=False,
     help='Keywords to search for in crawled pages',
     metavar='KEYWORDS'
 )
@@ -66,41 +70,66 @@ parser.add_argument(
     default=False,
     help='Clear cache before crawling'
 )
+parser.add_argument(
+    '-s', '--sitemap',
+    action='store_true',
+    dest='sitemap',
+    required=False,
+    default=False,
+    help='Use Sitemap for faster crawling'
+)
 
 
-def run_from_cli(url, params, keywords, recursive, output, verbose, clear_cache):
+def run_from_cli(url, params, keywords, recursive, output, verbose, clear_cache,
+                 known_urls):
     Crawler(
-        urls=url,
+        url=url,
         params=params,
         keywords=keywords,
         recursive=recursive,
         output_directory=output,
         verbose=verbose,
-        clear_cache=clear_cache
+        clear_cache=clear_cache,
+        known_urls=known_urls
     ).run()
 
 
 # Main function
 def main():
-    args = parser.parse_args()
-    if args.verbose:
-        print(args)
-
     def parse_params(params_args):
         for param in params_args:
             if '=' in param:
                 key, value = param.split('=')
                 yield key, value
             else:
-                raise ArgumentError(f"Invalid parameter argument: {param}, parameters must be in the form 'key=value'")
+                raise ArgumentError(
+                    f"Invalid parameter argument: {param}, parameters must be in the form 'key=value'")
+
+    args = parser.parse_args()
+
+    output_path = DEFAULT_PATH
+    if args.output:
+        if not path.exists(args.output):
+            makedirs(args.output)
+            output_path = args.output
+
+    sitemaps = {}
+    if args.sitemap:
+        sitemaps = {url: Sitemapper(url) for url in args.urls}
+        for sitemap in sitemaps.values():
+            sitemap.to_csv(output_path)
 
     params = dict(parse_params(args.params)) if args.params else None
 
     processes = []
     for url in args.urls:
+        known_urls = list(sitemaps[url].all_urls["loc"]) if sitemaps else []
         processes.append(Process(name=url,
                                  target=run_from_cli,
-                                 args=([url], params, args.keywords, args.recursive, args.output, args.verbose, args.clear_cache)))
+                                 args=(url, params, args.keywords,
+                                       args.recursive, output_path,
+                                       args.verbose, args.clear_cache,
+                                       known_urls)))
 
     if len(processes):
         if args.verbose:

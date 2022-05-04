@@ -1,46 +1,39 @@
-import logging
-import logging.handlers
+from os import makedirs, path
 from urllib.parse import urljoin, urlparse
-from datetime import datetime
-from os import path, makedirs
-import csv
 
-from requests_cache import CachedSession
-from requests.exceptions import RequestException
 from bs4 import BeautifulSoup
-
-
-logging.basicConfig(
-    format="%(asctime)s %(levelname)s %(message)s",
-    level=logging.INFO
-)
+from key_spyder.logs import Logger
+from key_spyder.defaults import DEFAULT_PATH, NOW
+from requests.exceptions import RequestException
+from requests_cache import CachedSession
 
 
 class Crawler:
     def __init__(self,
-                 urls: list[str] = None,
+                 url: str,
                  params: dict = None,
                  keywords: list[str] = None,
                  recursive: bool = False,
                  output_directory: str = None,
                  verbose: bool = False,
-                 clear_cache: bool = False):
+                 clear_cache: bool = False,
+                 known_urls: list[str] = None):
 
-        if urls is None:
-            urls = []
+        self.logger = Logger(__class__.__name__, verbose)
         if params is None:
             params = {}
         if keywords is None:
             keywords = []
         if output_directory is None:
-            output_directory = path.expanduser('~\Documents\key-spyder')
+            output_directory = DEFAULT_PATH
 
         for folder in ["logs", "results"]:
             dir_path = path.join(output_directory, folder)
             if not path.exists(dir_path):
                 makedirs(dir_path)
 
-        self.urls_to_visit = urls
+        self.first_url = url
+        self.urls_to_visit = [self.first_url]
         self.keywords = keywords
         self.params = params
         self.recursive = recursive
@@ -49,20 +42,13 @@ class Crawler:
         self.visited_urls = []
         self.results = ["url,params,keyword,line\n"]
 
-        now = datetime.now().strftime('%Y-%m-%dT%H%M%SZ')
-        fh_path = f"{output_directory}/logs/key-spyder_{now}.log"
-        file_handler = logging.FileHandler(fh_path, "w")
-        self.logger = logging.getLogger("key-spyder")
-        self.logger.addHandler(file_handler)
-
-        if verbose:
-            self.logger.setLevel(10)
+        if known_urls:
+            self.urls_to_visit = known_urls
 
         cache_name = f"{output_directory}/cache"
         self.session = CachedSession(cache_name, expire_after=86400)
         if clear_cache:
             self.session.cache.clear()
-
 
     @property
     def all_urls(self):
@@ -132,13 +118,13 @@ class Crawler:
         self.results = self.results + [f'{url},{self.params},{keyword},"{line}"\n']
 
     def write_results(self):
-        now = datetime.now().strftime('%Y-%m-%dT%H%M%SZ')
-        filename = path.join(self.output_directory, "results", f"results_{now}.csv")
+        filename = f"{urlparse(self.first_url).netloc}_results_{NOW}.csv"
+        filepath = path.join(self.output_directory, "results", filename)
         if len(self.results) > 1:
-            with open(filename, "w") as f:
+            with open(filepath, "w") as f:
                 f.writelines(self.results)
         else:
-            logging.info(f"No results found for Keywords: {self.keywords}")
+            self.logger.info(f"No results found for Keywords: {self.keywords}")
 
     def run(self):
         while self.urls_to_visit:
