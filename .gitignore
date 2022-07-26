@@ -1,8 +1,7 @@
-*.pyc
 __pycache__
 .vscode
 venv
 .idea
 dist
+build
 key_spyder.egg-info
-.env
