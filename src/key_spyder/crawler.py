@@ -1,4 +1,5 @@
 from os import makedirs, path
+from pathlib import Path, PurePath
 from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup
@@ -28,9 +29,9 @@ class Crawler:
             output_directory = DEFAULT_PATH
 
         for folder in ["logs", "results"]:
-            dir_path = path.join(output_directory, folder)
-            if not path.exists(dir_path):
-                makedirs(dir_path)
+            dir_path = PurePath.joinpath(output_directory, folder)
+            if not Path(dir_path).exists():
+                Path(dir_path).mkdir(parents=True)
 
         self.first_url = url
         self.urls_to_visit = [self.first_url]

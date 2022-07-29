@@ -1,7 +1,7 @@
 from argparse import ArgumentError, ArgumentParser
 from logging import INFO
 from multiprocessing import Process, log_to_stderr
-from os import makedirs, path
+from pathlib import Path
 
 from key_spyder.crawler import Crawler
 from key_spyder.defaults import DEFAULT_PATH
@@ -110,8 +110,8 @@ def command():
 
     output_path = DEFAULT_PATH
     if args.output:
-        if not path.exists(args.output):
-            makedirs(args.output)
+        if not Path(args.output).exists():
+            Path(args.output).mkdir()
             output_path = args.output
 
     sitemaps = {}

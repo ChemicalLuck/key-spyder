@@ -1,7 +1,8 @@
 from datetime import datetime
 from os import path, makedirs
+from pathlib import Path
 
 DEFAULT_PATH = path.expanduser("~/Documents/key-spyder")
-if not path.exists(DEFAULT_PATH):
-    makedirs(DEFAULT_PATH)
+if not Path(DEFAULT_PATH).exists():
+    Path(DEFAULT_PATH).mkdir(parents=True)
 NOW = datetime.now().strftime('%Y-%m-%dT%H%M%SZ')

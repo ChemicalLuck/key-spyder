@@ -1,4 +1,4 @@
-from os import makedirs, path
+from pathlib import Path
 from urllib import request, robotparser
 from urllib.parse import urlparse
 
@@ -86,8 +86,8 @@ class Sitemapper:
         return df
 
     def to_csv(self, filepath):
-        sitemap_path = path.join(filepath, "sitemaps")
-        if not path.exists(sitemap_path):
-            makedirs(sitemap_path)
+        sitemap_path = PurePath.joinpath(filepath, "sitemaps")
+        if not Path(sitemap_path).exists():
+            Path(sitemap_path).mkdir(parents=True)
         self.logger.info(f"Saving sitemap to {sitemap_path}")
         self.all_urls.to_csv(f"{sitemap_path}/{self.__filename}", index=False)
